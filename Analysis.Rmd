@@ -1,0 +1,161 @@
+---
+title: "Analysis of Rare Variants in Family 8"
+author: "Yael Hernandez"
+date: "2025-09-15"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Load the data
+
+```{r, warning=FALSE, message=FALSE}
+library(readr)
+library(dplyr)
+# --- 1. Cargar los datos ---
+file_path = "FAM8.xlsx - CSC_32553.varfile.ex.EDITED.csv"
+df = read_csv(file_path)
+names(df)
+
+# --- 2. Distribución de algunas columnas clave ---
+table(df$ZYG)                  # cigocidad
+table(df$FILTER)               # filtros PASS/FAIL
+table(df$`Proband:ZYG`)        # genotipos del probando
+table(df$`Father:ZYG`)         # genotipos del padre
+table(df$`Mother:ZYG`)         # genotipos de la madre
+table(df$`UASib:ZYG`)          # genotipos de la hermana
+
+# --- 3. Para columnas numéricas importantes ---
+hist(df$QUAL, breaks = 50, main="Distribución de QUAL", xlab="QUAL")
+hist(df$RATIO, breaks = 50, main="Distribución de RATIO", xlab="RATIO")
+```
+
+## Explicacion de las columnas del dataset
+
+**Identificacion de la variante**
+
+-   **#CHR** -\> Cromosoma en donde esta la variante (1-22,X,Y,MT)
+
+-   **START** → Posición inicial en el cromosoma (coordenada genómica).
+
+-   **END** → Posición final (para SNVs suele ser igual a START, para indels puede diferir).
+
+-   **REF** → Alelo de referencia (según el genoma de referencia, ej. GRCh38).
+
+-   **ALT** → Alelo alternativo observado en tu muestra.
+
+-   **ZYG** → Cigocidad en la muestra del *calling original* (puede variar con las columnas por individuo).
+
+**Calidad del llamado**
+
+-   **FILTER** → Estado del filtro (ej. `PASS` significa variante confiable; otros flags indican posibles problemas).
+
+-   **QUAL** → Puntaje de calidad de la llamada (Phred-scale, más alto = más confiable).
+
+-   **RR** → Read count de alelos de referencia (cuántos reads apoyan al REF).
+
+-   **VR** → Read count de alelos variantes (cuántos reads apoyan al ALT).
+
+-   **TR** → Total de lecturas en esa posición (RR+VR).
+
+-   **RATIO** → Proporción de alelo variante (VR/TR).
+
+-   **GQ** → Genotype Quality (calidad del genotipo asignado, en escala Phred).
+
+-   **PL** → Genotype likelihoods (valores de probabilidad para hom REF / het / hom ALT).
+
+**Informacion de VCF extendida**
+
+-   **VCF_INFO** → Campo extra con anotaciones del VCF (`DP`, `MQ`, `QD`, etc.).
+
+-   **BAND** → Región cromosómica (ej. 1q41).
+
+-   **SNP17NF** → ID de la variante en una base de datos de SNPs (ej. `rs` de dbSNP).
+
+**Anotacion funcional**
+
+-   **ANNOTATION** → Tipo de cambio funcional (ej. `nonsynonymous SNV`, `synonymous`, `stopgain`, `frameshift`).
+
+-   **GENE** → Símbolo del gen afectado (ej. MARCH1).
+
+-   **GENE_NAME** → Nombre extendido del gen.
+
+-   **ACCESSION** → Transcript ID en RefSeq (ej. NM_022746).
+
+-   **EXON** → Exón afectado.
+
+-   **NT_CHANGE** → Cambio a nivel de nucleótido (ej. c.A493G).
+
+-   **AA_CHANGE** → Cambio a nivel de aminoácido (ej. p.T165A).
+
+-   **ALL_TRX** → Anotación de todos los transcritos (no solo el principal).
+
+**Frecuencia poblacional**
+
+-   **TGP_FREQ** → Frecuencia alélica en *1000 Genomes Project*.
+
+-   **ESP_FREQ** → Frecuencia alélica en *Exome Sequencing Project*.
+
+-   **EVE_ALT_FREQ** → Otras bases de datos de frecuencia de alelos (ExAC, gnomAD, etc. según el pipeline).
+
+-   **EVE_HOM** → Número de homocigotos observados en esas bases.
+
+-   **EVS_ALLELES / ESP_GENOTYPES** → Información de genotipos en cohortes de referencia.
+
+Predictores funcionales
+
+(miden el efecto de variantes missense o no sinonimas)
+
+-   **GRANTHAM_SC** → Distancia química entre aminoácidos (alto valor = cambio más drástico).
+
+-   **PHASTCONS** → Conservación filogenética (0 = no conservado, 1 = altamente conservado).
+
+-   **GERP / GERP_ESP** → Puntuación de conservación evolutiva (alto = función importante).
+
+-   **PHYLOP_SC** → Conservación evolutiva (positivo = conservado, negativo = acelerado).
+
+-   **PHYLOP_PRED** → Predicción (conservado / neutro).
+
+-   **LRT_SCORE / LRT_PRED** → Likelihood Ratio Test, predice si la variante es funcional o neutral.
+
+-   **SIFT_SCORE / SIFT_PRED** → Predice tolerado o dañino basado en conservación de aminoácidos.
+
+-   **PPH2_SCORE / PPH2_PRED** → PolyPhen-2, clasifica como benigno, posiblemente dañino o probablemente dañino.
+
+-   **MTT_SCORE / MTT_PRED** → Otro predictor de patogenicidad (dependiendo del pipeline).
+
+-   **ESP_PPH2** → Predicciones integradas de PolyPhen-2 en ESP.
+
+**Evolutivo/Comparativo**
+
+-   **CHIMP** → Alelo en chimpancé (para inferir ancestralidad).
+
+-   **EVE_ALT_FREQ** → Frecuencia alternativa en bases evolutivas.
+
+Genotipos familiares
+
+-   **Proband:ZYG** → Cigocidad de la variante en el paciente (ej. `het`, `hom`).
+
+-   **Father:ZYG** → Cigocidad en el padre.
+
+-   **Mother:ZYG** → Cigocidad en la madre.
+
+-   **UASib:ZYG** → Cigocidad en la hermana no afectada.
+
+Se puede ver:
+
+-   **De novo**: Variante presente en el probando, ausente en ambos padres.
+
+-   **Recesivo homocigoto**: Proband hom ALT, padres heterocigotos.
+
+-   **Compuesto heterocigoto**: Proband heterocigoto para dos variantes diferentes en el mismo gen, cada variante heredada de un progenitor distinto.
+
+# Filtering the data
+
+## de novo filtering
+
+## recessive disorders filtering
+
+# Find Candidate's Genes
