@@ -1,5 +1,5 @@
 ---
-title: "Analysis of Rare Variants in Family 8"
+title: "Analisis de Variantes raras en Familia 8"
 author: "Yael Hernandez"
 date: "`r Sys.Date()`"
 output: 
@@ -23,7 +23,7 @@ editor_options:
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
-# Load the data
+# Preprocesamiento de los datos
 
 ```{r, warning=FALSE, message=FALSE}
 library(readr)
@@ -193,24 +193,31 @@ Se puede ver:
     diferentes en el mismo gen, cada variante heredada de un progenitor
     distinto.
 
-# Filtering the data
+# Filtrado de los datos
 
 ```{r}
 
 #filtrado por calidad de QC, variantes sinonimas, y MAF <
 df_filt = df %>%
-  filter(QUAL > 30) %>% # solo variantes de calidad
-  #excluir sinónimas y otras variantes sin consecuencia proteica
+  # Mantienes el filtro de calidad y exclusión de sinónimas
+  filter(QUAL > 30) %>%
   filter(!ANNOTATION %in% c("synonymous SNV", "nonframeshift insertion", 
                             "nonframeshift deletion", "ncRNA_splicing")) %>% 
-  filter(is.na(TGP_FREQ) | TGP_FREQ <= 0.01) %>%  #MAF < 1%
+  # Filtros de frecuencia alélica (MAF)
+  filter(is.na(TGP_FREQ) | TGP_FREQ <= 0.01) %>%  
   filter(is.na(ESP_FREQ) | ESP_FREQ <= 0.01) %>%
+  filter(is.na(EVE_ALT_FREQ) | EVE_ALT_FREQ <= 0.01) %>%
+  
+  # Filtro de calidad de genotipo
   filter(GQ >= 20 | is.na(GQ)) %>%
+  
+  # Filtros para predictores funcionales
   filter(is.na(SIFT_PRED) | SIFT_PRED %in% c("damaging")) %>%
+  filter(is.na(LRT_PRED) | LRT_PRED %in% c("deleterious")) %>%
   filter(is.na(MTT_PRED) | MTT_PRED %in% c("disease_causing"))
 ```
 
-## de novo filtering
+## filtrado para mutaciones de novo
 
 ```{r}
 # De novo: presente en probando, ausente en ambos padres y hermana
@@ -226,7 +233,7 @@ print(denovo_genes)
 
 ```
 
-## recessive filtering
+## filtrado para recesivos
 
 ```{r}
 # Hom recesivos: probando hom ALT, padres heterocigotos
@@ -237,4 +244,49 @@ recessive_hom <- df_filt %>%
 
 recessive_hom_genes <- unique(recessive_hom$GENE)
 print(recessive_hom_genes)
+```
+
+```{r}
+#Heterocigosidad compuesta
+# Filtra las variantes donde el probando es heterocigoto
+comphet_candidates = df_filt %>%
+  filter(`Proband:ZYG` == "Proband:het")
+
+# Identifica genes donde el probando tiene dos variantes diferentes,
+# una heredada de cada padre
+comphet_genes = comphet_candidates %>%
+  # Agrupa por gen para analizar las variantes juntas
+  group_by(GENE) %>%
+  # Asegúrate de que hay al menos 2 variantes en el mismo gen
+  filter(n() >= 2) %>%
+  # Verifica que hay una variante con el patrón de herencia paterno (Father:het)
+  # y otra variante con el patrón de herencia materno (Mother:het)
+  filter(any(`Father:ZYG` == "Father:het" & `Mother:ZYG` == "Mother:na") & 
+         any(`Mother:ZYG` == "Mother:het" & `Father:ZYG` == "Father:na")) %>%
+  # Selecciona el nombre del gen
+  pull(GENE) %>%
+  unique()
+
+print(comphet_genes)
+```
+
+# Genes Candidatos
+
+```{r}
+candidate_genes = c(denovo_genes,recessive_hom_genes, comphet_genes)
+print(candidate_genes)
+```
+
+TUBB3 es el mas coherente con el fenotipo observado y descrito para la
+familia 8.
+
+Phenotype: Microcephaly; Cerebellar malformation; Seizures, febrile;
+Global developmental delay; Vision impairment, central; Hypotonia;
+Dystonia, generalized; Hyperreflexia; Weak cry
+
+Ademas tiene sentido que sea una variante de novo dado a que ni los
+padres y hermana estan afectados con la enfermedad.
+
+```{r}
+t(denovo_variants[3, ])
 ```
